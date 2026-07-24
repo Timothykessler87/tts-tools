@@ -436,6 +436,67 @@ local function buildMemo(tough, pow)
   return tostring(tough) .. "|" .. tostring(pow)
 end
 
+-- ===== Range measuring =====
+
+-- TTS's default table scale is 1 world unit = 1 inch. If your table/
+-- minis use a different scale, adjust this to calibrate.
+local INCHES_PER_UNIT = 1
+
+local function getDistanceInches(a, b)
+  local pa, pb = a.getPosition(), b.getPosition()
+  local dx, dz = pa.x - pb.x, pa.z - pb.z
+  return math.sqrt(dx * dx + dz * dz) * INCHES_PER_UNIT
+end
+
+-- Parses this hero's equipment (e.g. `Boss Pistol (12", A2)`,
+-- `CCW (A2)`) into {name, range} pairs. range is nil for melee
+-- weapons (no `"` value present), which OPR resolves in base contact
+-- rather than by range check.
+local function getWeaponRanges()
+  local _, equipItems = splitAbilitiesAndEquipment()
+  local weapons = {}
+  if not equipItems then return weapons end
+  for _, item in ipairs(equipItems) do
+    local openIdx = item:find("(", 1, true)
+    local name = item
+    local range = nil
+    if openIdx then
+      name = trim(item:sub(1, openIdx - 1))
+      local closeIdx = item:find(")", openIdx, true)
+      local inside = item:sub(openIdx + 1, (closeIdx or (#item + 1)) - 1)
+      local firstToken = splitTopLevelCommas(inside)[1] or ""
+      local quoteIdx = firstToken:find("\"", 1, true)
+      if quoteIdx then
+        range = tonumber(trim(firstToken:sub(1, quoteIdx - 1)))
+      end
+    end
+    table.insert(weapons, { name = name, range = range })
+  end
+  return weapons
+end
+
+-- Reports this hero's distance to each target and whether each of
+-- its ranged weapons can reach it.
+local function measureRangeReport(targets)
+  local weapons = getWeaponRanges()
+  local lines = {}
+  for _, target in ipairs(targets) do
+    local dist = getDistanceInches(self, target)
+    local targetName = target.getName()
+    if targetName == "" then targetName = "target" end
+    table.insert(lines, UNIT_NAME .. " -> " .. targetName .. ": " .. string.format("%.1f", dist) .. "\"")
+    for _, w in ipairs(weapons) do
+      if w.range then
+        local status = dist <= w.range and "IN RANGE" or "out of range"
+        table.insert(lines, "   " .. w.name .. " (" .. w.range .. "\"): " .. status)
+      else
+        table.insert(lines, "   " .. w.name .. " (melee)")
+      end
+    end
+  end
+  return table.concat(lines, "\n")
+end
+
 -- Both global (not local) so other models can invoke them via
 -- .call() when you apply Take/Heal Wound or Use/Restore Power to a
 -- multi-selected group.
@@ -490,6 +551,18 @@ local function buildMenu()
       end)
     end)
   end
+  self.addContextMenuItem("Measure Range", function(player_color)
+    local selected = Player[player_color].getSelectedObjects()
+    local targets = {}
+    for _, o in ipairs(selected) do
+      if o.getGUID() ~= self.getGUID() then table.insert(targets, o) end
+    end
+    if #targets == 0 then
+      broadcastToColor("Measure Range: select one or more target models first, then right-click this model and choose Measure Range again.", player_color, {1, 0.4, 0.4})
+      return
+    end
+    broadcastToColor(measureRangeReport(targets), player_color, {1, 1, 1})
+  end)
 end
 
 function onLoad()
