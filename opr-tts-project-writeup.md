@@ -49,6 +49,18 @@ changes, and should be treated as needing matching edits.
    across a multi-selected group, the clicked model calls
    `otherObject.call('adjustWound', {delta = -1})` — TTS's built-in RPC
    mechanism for invoking a named global function on another object's script.
+5. **"Measure Range"** (every assigned model, squad and hero alike): select
+   one or more target models, then right-click the measuring model and
+   choose it. It computes the horizontal (x/z) distance from that model to
+   each selected target, assuming **1 TTS world unit = 1 inch** (retune
+   `INCHES_PER_UNIT` in the per-model template if your table's scale
+   differs), then checks that distance against the range of each of the
+   model's own ranged weapons (parsed straight out of its `Equipment:` list
+   — a weapon entry needs a `24"`-style quoted range to be checked; entries
+   with no quoted range, e.g. `CCW (A2)`, are reported as melee and not
+   range-checked, since OPR resolves those in base contact). Results are
+   printed to the acting player via `broadcastToColor`, one line per target
+   plus one line per weapon.
 
 ## Display design
 
