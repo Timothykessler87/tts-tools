@@ -1,3 +1,29 @@
-Wrysprocket [1] Q5+ D5+ Pow5 Str6+ Dex5+ Wil5+ | 95pts | Instigated Restoration, Defense(1), Mishievous, Tough(9), Inspire (Dex), Song of Health (Wil)
-Boss Pistol (12", A2), CCW (A2)
+++ HDF Into The Frontier - Human Defense Force (v3.5.3) [GFSQAI 1190pts] [15 Units] ++
+
+3x Infantry Squad [3] Q5+ D5+ | 35pts | 3x Hold the Line
+3x Rifle (24", A1), 3x CCW (A1)
+
+3x Veteran [1] Q4+ D5+ | 50pts | Hold the Line, Tough(3)
+Rifle (24", A3), CCW (A3)
+
+3x GRUNT Robot [1] Q5+ D5+ | 55pts | Fearless, Good Shot, Hold the Line, Tough(3)
+Rifle (24", A3), CCW (A3)
+
+Company Leader [1] Q4+ D5+ | 105pts | Hero, Tough(9), Hold the Line
+Master Pistol (12", A6), CCW (A6)
+
+Drill Sergeant [1] Q4+ D5+ | 115pts | Hero, Tough(9), Hold the Line, Bane in Melee Buff
+Master Pistol (12", A6), CCW (A6)
+
+Enforcer [1] Q4+ D5+ | 125pts | Hero, Tough(9), Hold the Line, No Retreat Buff
+Master Pistol (12", A6), CCW (A6)
+
+Weapon Team [1] Q5+ D5+ | 125pts | Tough(9), Hold the Line
+Mortar (30", A3, Blast(3), Indirect), Crew (A6)
+
+Colonel Rixxon [1] Q4+ D5+ | 135pts | Hero, Tough(9), Unique, Hold the Line, Morale Debuff
+Master Pistol (12", A6), Energy Sword (A6, AP(1), Rending)
+
+OGRE Robot [1] Q4+ D4+ | 165pts | Fearless, Furious, Tough(9), Hold the Line
+OGRE Gatling Gun (12", A9, AP(1)), Heavy CCW (A3, AP(1))
 
