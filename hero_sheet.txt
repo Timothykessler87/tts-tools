@@ -1,0 +1,9 @@
+Wrysprocket [1] Q5+ D5+ Pow5 Str6+ Dex5+ Wil5+ | 95pts | Instigated Restoration, Defense(1), Mishievous, Tough(9), Inspire (Dex), Song of Health (Wil)
+Boss Pistol (12", A2), CCW (A2)
+Curing Kit: Use with skill action, then remove. The hero loses all status conditions. The effect may be applied to one other hero within 3" instead.
+Defense: This model gets +X to defense rolls.
+Inspire: Pick two other friendly units within 9", which get +1 to their next stat roll each.
+Instigated Restoration: Once per game, when activated, two other heroes within 9" restore 1 power each.
+Mischievous: When attacking, targets must re-roll unmodified Defense results of 6 when blocking hits from this model's weapons.
+Song of Health: Pick two other friendly heroes within 9", which restore 1 wound each.
+Tough: Once a model has taken as many wounds as its Tough value, it is killed (remove from play).

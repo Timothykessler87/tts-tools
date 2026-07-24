@@ -1,0 +1,580 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================
+# opr_hero_list_to_lua.sh
+#
+# Parses hero-format entries (Star Quest / hero-scale, with Power
+# and Str/Dex/Wil) and generates a Global script with HERO_PROFILES
+# pre-filled, instead of typing every hero in by hand.
+#
+# Usage:
+#   ./opr_hero_list_to_lua.sh hero_list.txt                # writes opr_hero_assigner.lua
+#   ./opr_hero_list_to_lua.sh hero_list.txt my_output.lua   # custom output name
+#
+# Expects each hero as a two-line block, blank-line separated:
+#   Name [size] Q#+ D#+ Pow# Str#+ Dex#+ Wil#+ | ###pts | rule, rule, ...
+#   weapon, weapon, ...
+# ==============================================================
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <hero_list.txt> [output.lua]" >&2
+  exit 1
+fi
+
+INPUT_FILE="$1"
+OUTPUT_FILE="${2:-opr_hero_assigner.lua}"
+
+if [[ ! -f "$INPUT_FILE" ]]; then
+  echo "Error: input file '$INPUT_FILE' not found" >&2
+  exit 1
+fi
+
+# Escapes double quotes / backslashes so extracted text is safe to
+# drop straight into a Lua "..." string literal.
+lua_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '%s' "$s"
+}
+
+# Matches:  [Nx ]Name [size] Q#+ D#+ Pow# Str#+ Dex#+ Wil#+ | ###pts | rules
+# Groups:     2   3     4     5   6   7    8     9    10    11      12
+STAT_RE='^(([0-9]+)x )?(.+) \[([0-9]+)\] Q([0-9]+)\+ D([0-9]+)\+ Pow([0-9]+) Str([0-9]+)\+ Dex([0-9]+)\+ Wil([0-9]+)\+ \| ([0-9]+)pts \| (.+)$'
+
+entries=""
+
+unit_name=""
+squad_size=""
+instance_count=""
+quality=""
+defense=""
+pow=""
+str=""
+dex=""
+wil=""
+points=""
+rules_raw=""
+equipment=""
+equipment_captured=""
+details=""
+
+build_entry() {
+  local tough=""
+  if [[ "$rules_raw" =~ Tough\(([0-9]+)\) ]]; then
+    tough="${BASH_REMATCH[1]}"
+  fi
+
+  # Tough(N) gets folded into the stats line instead, so drop it
+  # from the rules list to avoid saying it twice.
+  local rules_clean
+  rules_clean="$(printf '%s' "$rules_raw" | sed -E 's/,? *Tough\([0-9]+\)//; s/^, *//; s/, *$//')"
+
+  local stats="Quality ${quality}+ | Defense ${defense}+"
+  if [[ -n "$tough" ]]; then
+    stats="${stats} | Tough ${tough}"
+  fi
+  local substats="Str ${str}+ | Dex ${dex}+ | Wil ${wil}+"
+
+  local rules_full="$rules_clean"
+  if [[ -n "$equipment" ]]; then
+    if [[ -n "$rules_full" ]]; then
+      rules_full="${rules_full}. Equipment: ${equipment}"
+    else
+      rules_full="Equipment: ${equipment}"
+    fi
+  fi
+
+  local name_esc stats_esc substats_esc rules_esc
+  name_esc="$(lua_escape "$unit_name")"
+  stats_esc="$(lua_escape "$stats")"
+  substats_esc="$(lua_escape "$substats")"
+  rules_esc="$(lua_escape "$rules_full")"
+
+  printf '  -- %sx unit(s), %s model(s) each | %spts\n  ["%s"] = {\n    class = "",  -- e.g. "Instigator"\n    level = "",  -- e.g. 1\n    stats = "%s",\n    substats = "%s",\n    pow = %s,\n    rules = "%s",\n    details = [[\n%s\n]],\n  },\n' \
+    "${instance_count:-1}" "$squad_size" "$points" "$name_esc" "$stats_esc" "$substats_esc" "$pow" "$rules_esc" "$details"
+}
+
+reset_block() {
+  unit_name=""; squad_size=""; instance_count=""; quality=""
+  defense=""; pow=""; str=""; dex=""; wil=""; points=""
+  rules_raw=""; equipment=""; equipment_captured=""; details=""
+}
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+  if [[ -z "$line" ]]; then
+    if [[ -n "$unit_name" ]]; then
+      entries+="$(build_entry)"$'\n'
+      reset_block
+    fi
+    continue
+  fi
+
+  if [[ -z "$unit_name" && "$line" =~ $STAT_RE ]]; then
+    instance_count="${BASH_REMATCH[2]}"
+    unit_name="${BASH_REMATCH[3]}"
+    squad_size="${BASH_REMATCH[4]}"
+    quality="${BASH_REMATCH[5]}"
+    defense="${BASH_REMATCH[6]}"
+    pow="${BASH_REMATCH[7]}"
+    str="${BASH_REMATCH[8]}"
+    dex="${BASH_REMATCH[9]}"
+    wil="${BASH_REMATCH[10]}"
+    points="${BASH_REMATCH[11]}"
+    rules_raw="${BASH_REMATCH[12]}"
+    continue
+  fi
+
+  # The first non-blank line after the stat line is equipment. Any
+  # further lines before the blank separator are ability/item detail
+  # text (one ability per line: "Name: full description here"),
+  # accumulated for the details field.
+  if [[ -n "$unit_name" ]]; then
+    if [[ -z "$equipment_captured" ]]; then
+      equipment="$line"
+      equipment_captured=1
+    elif [[ -n "$details" ]]; then
+      details+=$'\n'"$line"
+    else
+      details="$line"
+    fi
+  fi
+done < "$INPUT_FILE"
+
+# Flush the last block if the file doesn't end on a blank line.
+if [[ -n "$unit_name" ]]; then
+  entries+="$(build_entry)"$'\n'
+fi
+
+if [[ -z "$entries" ]]; then
+  echo "Error: no heroes matched the expected format (Name [size] Q#+ D#+ Pow# Str#+ Dex#+ Wil#+ | ###pts | rules)." >&2
+  exit 1
+fi
+
+# ---- Write the file: static header, generated table, static rest ----
+
+cat > "$OUTPUT_FILE" << 'HEADER_EOF'
+-- ============================================================
+-- OPR Hero Assigner — Global script, generated by opr_hero_list_to_lua.sh
+-- (Star Quest / hero-scale variant — adds Power, Str/Dex/Wil on top
+-- of the base Quality/Defense/Tough that the squad-mob version uses.)
+--
+-- What this does:
+--   - Right-click any unassigned model -> pick a hero from the list
+--     to assign it. Assignment INJECTS a self-contained script into
+--     that specific model (via setLuaScript + reload), so the model
+--     keeps working — name, tooltip, wound/power tracking — even if
+--     you save it individually and load it into a totally different
+--     game with no Global script at all.
+--   - Once assigned, a model manages itself: its own right-click
+--     menu ("Take Wound" / "Heal Wound" and "Use Power" /
+--     "Restore Power", each applying to your whole current
+--     selection) lives in ITS OWN script from that point on.
+--   - The model's Name field shows the hero name, Quality/Defense,
+--     current/max Tough, and current/max Power, all colored via
+--     TTS's own BBCode — visible without even hovering. The tooltip
+--     (hover) adds Str/Dex/Wil, abilities, and equipment.
+--   - This Global script's only ongoing job is offering the hero
+--     list to models that don't have a script yet.
+--
+-- Install:
+--   Right-click the table -> Scripting -> Lua Script -> paste this
+--   in, then Save & Play. (If TTS says "no save found", create a
+--   save via Games -> Save & Load -> Create first, then re-save
+--   the script — see previous notes on that.)
+--
+-- Note on models assigned under an earlier version of this script:
+--   Those models never got their own script, so they'll show up as
+--   "unassigned" here again — just right-click and pick their hero
+--   once more to bring them onto this version.
+--
+-- Regenerate:
+--   Re-run opr_hero_list_to_lua.sh whenever your hero list changes,
+--   rather than hand-editing HERO_PROFILES below.
+-- ============================================================
+
+-- Set true if you only want the menu added to objects tagged
+-- "Figurine" (most official minis/tokens carry that tag).
+local ONLY_FIGURINES = false
+
+local HERO_PROFILES = {
+HEADER_EOF
+
+printf '%s' "$entries" >> "$OUTPUT_FILE"
+
+cat >> "$OUTPUT_FILE" << 'FOOTER_EOF'
+}
+
+local function getToughMax(unitKey)
+  local profile = HERO_PROFILES[unitKey]
+  if not profile then return nil end
+  return tonumber(string.match(profile.stats, "Tough (%d+)"))
+end
+
+local function getPowMax(unitKey)
+  local profile = HERO_PROFILES[unitKey]
+  if not profile then return 0 end
+  return tonumber(profile.pow) or 0
+end
+
+-- Escapes a string so it's safe to drop into a Lua "..." literal
+-- inside the per-model script template.
+local function luaStringEscape(s)
+  s = s:gsub("\\", "\\\\")
+  s = s:gsub('"', '\\"')
+  return s
+end
+
+-- Escapes a string so gsub treats it as literal replacement text
+-- rather than interpreting "%" as a capture-group reference.
+local function gsubSafe(s)
+  return (s:gsub("%%", "%%%%"))
+end
+
+-- ===== Self-contained per-model script template =====
+-- Everything an assigned hero needs to run entirely on its own: its
+-- stat block, its wound/power tracking, its own menu. @@TOKEN@@
+-- placeholders get filled in per-hero in buildPerModelScript.
+
+local PER_MODEL_SCRIPT_TEMPLATE = [==[
+-- Self-contained OPR hero script — generated by opr_hero_assigner.lua
+-- Portable: this object keeps working (name, tooltip, wound/power
+-- tracking) even when saved individually and loaded into a different
+-- game, because everything it needs lives in this script and its
+-- memo.
+
+local UNIT_NAME = "@@UNIT_NAME@@"
+local CLASS = "@@CLASS@@"
+local LEVEL = "@@LEVEL@@"
+local STATS = "@@STATS@@"
+local SUBSTATS = "@@SUBSTATS@@"
+local RULES = "@@RULES@@"
+local TOUGH_MAX = @@TOUGH_MAX@@
+local POW_MAX = @@POW_MAX@@
+-- Full ability/item text, pasted in from your reference. Optional —
+-- leave HERO_PROFILES' "details" field empty and this shows nothing.
+local DETAILS = [[@@DETAILS@@]]
+
+-- ===== Text helpers =====
+
+-- Splits a comma-separated string on TOP-LEVEL commas only, so a
+-- weapon like "Energy Sword (A6, AP(1), Rending)" stays one item
+-- instead of shattering on the commas inside its own parentheses.
+-- Trims leading/trailing whitespace without the lazy-match-anchored
+-- pattern that TTS's Lua engine (MoonSharp) can throw "pattern too
+-- complex" on for moderately long strings.
+local function trim(s)
+  s = s:gsub("^%s+", "")
+  s = s:gsub("%s+$", "")
+  return s
+end
+
+local function splitTopLevelCommas(s)
+  local items = {}
+  local depth = 0
+  local start = 1
+  for i = 1, #s do
+    local c = s:sub(i, i)
+    if c == "(" then depth = depth + 1
+    elseif c == ")" then depth = depth - 1
+    elseif c == "," and depth == 0 then
+      table.insert(items, s:sub(start, i - 1))
+      start = i + 1
+    end
+  end
+  table.insert(items, s:sub(start))
+  for i, item in ipairs(items) do
+    items[i] = trim(item)
+  end
+  return items
+end
+
+-- Pulls the equipment list out of RULES (if present) as a table of
+-- individual items, separate from the ability/special-rule text.
+-- Uses a plain find() rather than a lazy-match pattern for the same
+-- "pattern too complex" reason as trim() above.
+local function splitAbilitiesAndEquipment()
+  local idx = RULES:find("Equipment:", 1, true)
+  if not idx then
+    return trim(RULES), nil
+  end
+  local abilities = RULES:sub(1, idx - 1)
+  local equipStr = RULES:sub(idx + #"Equipment:")
+  abilities = abilities:gsub("%.%s*$", "")
+  abilities = trim(abilities)
+  equipStr = trim(equipStr)
+  return abilities, splitTopLevelCommas(equipStr)
+end
+
+-- Splits text on newlines with plain find() (no pattern), same
+-- "pattern too complex" reasoning as trim() above.
+local function splitLines(text)
+  local lines = {}
+  local pos = 1
+  while true do
+    local nlIdx = text:find("\n", pos, true)
+    if not nlIdx then
+      table.insert(lines, text:sub(pos))
+      break
+    end
+    table.insert(lines, text:sub(pos, nlIdx - 1))
+    pos = nlIdx + 1
+  end
+  return lines
+end
+
+-- Reformats DETAILS from "Name: description" lines into a bolded
+-- "Name:" header, the description as [sub]...[/sub] on the next
+-- line, and a blank line between entries so they don't run together.
+local function formatDetailsBlock()
+  local text = trim(DETAILS)
+  if text == "" then return "" end
+  local outLines = {}
+  local first = true
+  for _, line in ipairs(splitLines(text)) do
+    line = trim(line)
+    if line ~= "" then
+      local colonIdx = line:find(":", 1, true)
+      if not first then
+        table.insert(outLines, "")
+      end
+      first = false
+      if colonIdx then
+        local name = trim(line:sub(1, colonIdx))
+        local desc = trim(line:sub(colonIdx + 1))
+        table.insert(outLines, "[b]" .. name .. "[/b]")
+        table.insert(outLines, "[sub]" .. desc .. "[/sub]")
+      else
+        table.insert(outLines, line)
+      end
+    end
+  end
+  return table.concat(outLines, "\n")
+end
+
+-- Colored via TTS's own BBCode ([hexcolor]text[-]), which works
+-- directly in the Name field and tooltips — no UI panel needed.
+-- White text just uses no color tag at all rather than [ffffff].
+local CLASS_LEVEL_COLOR = "73CDE0" -- light blue, for "Class LvN"
+local Q_COLOR = "ef4444"     -- red-orange, for Quality
+local D_COLOR = "0ea5e9"     -- sky blue, for Defense
+local TOUGH_COLOR = "2ecc40" -- green, for current and max Tough
+local POW_COLOR = "a855f7"   -- purple, for current and max Power
+local RULES_COLOR = "3498db" -- blue
+
+-- Name field: bold hero name, then "Class LvN", then Quality/
+-- Defense, then "Tough: current / max", then "Power: current / max"
+-- — all visible without hovering.
+local function buildNameLabel(tough, pow)
+  -- Two separate simple matches instead of one pattern spanning both
+  -- (again to avoid the lazy-match-across-a-long-string complexity).
+  local q = STATS:match("Quality (%d+)%+")
+  local d = STATS:match("Defense (%d+)%+")
+  local label = "[b]" .. UNIT_NAME .. "[/b]"
+  if CLASS ~= "" then
+    label = label ..
+      "\n[" .. CLASS_LEVEL_COLOR .. "]" .. CLASS .. "[-] Lv" .. LEVEL
+  end
+  if q and d then
+    label = label ..
+      "\n[" .. Q_COLOR .. "][b]Q" .. q .. "[/b]+[-]" ..
+      " / " ..
+      "[" .. D_COLOR .. "][b]D" .. d .. "[/b]+[-]"
+  end
+  if TOUGH_MAX > 0 then
+    label = label ..
+      "\n[b]Tough: [" .. TOUGH_COLOR .. "]" .. tough .. "[/b][-]" ..
+      " / " ..
+      "[b][" .. TOUGH_COLOR .. "]" .. TOUGH_MAX .. "[/b][-]"
+  end
+  if POW_MAX > 0 then
+    label = label ..
+      "\n[b]Power: [" .. POW_COLOR .. "]" .. pow .. "[/b][-]" ..
+      " / " ..
+      "[b][" .. POW_COLOR .. "]" .. POW_MAX .. "[/b][-]"
+  end
+  return label
+end
+
+-- Tooltip (hover): main stats, Str/Dex/Wil, abilities, equipment,
+-- then full pasted-in ability/item text if provided. White text
+-- (stats, equipment, details) uses no color tag at all.
+local function formatDescription()
+  local abilities, equipItems = splitAbilitiesAndEquipment()
+  local lines = {}
+  table.insert(lines, STATS)
+  if SUBSTATS ~= "" then
+    table.insert(lines, SUBSTATS)
+  end
+  table.insert(lines, "[" .. RULES_COLOR .. "]" .. abilities .. "[-]")
+  if equipItems then
+    table.insert(lines, "Equipment:")
+    for _, item in ipairs(equipItems) do
+      table.insert(lines, "     " .. item)
+    end
+  end
+  local detailsBlock = formatDetailsBlock()
+  if detailsBlock ~= "" then
+    table.insert(lines, "")
+    table.insert(lines, detailsBlock)
+  end
+  return table.concat(lines, "\n")
+end
+
+-- Memo stores current Tough and current Power as "tough|pow".
+local function parseMemo(memo)
+  local tough, pow = string.match(memo or "", "^(%-?%d*)|?(%-?%d*)$")
+  tough = tonumber(tough)
+  pow = tonumber(pow)
+  if not tough then tough = TOUGH_MAX end
+  if not pow then pow = POW_MAX end
+  return tough, pow
+end
+
+local function buildMemo(tough, pow)
+  return tostring(tough) .. "|" .. tostring(pow)
+end
+
+-- Both global (not local) so other models can invoke them via
+-- .call() when you apply Take/Heal Wound or Use/Restore Power to a
+-- multi-selected group.
+function adjustWound(params)
+  local delta = (params and params.delta) or 0
+  local tough, pow = parseMemo(self.memo)
+  tough = math.max(0, math.min(TOUGH_MAX, tough + delta))
+  self.memo = buildMemo(tough, pow)
+  self.setName(buildNameLabel(tough, pow))
+end
+
+function adjustPower(params)
+  local delta = (params and params.delta) or 0
+  local tough, pow = parseMemo(self.memo)
+  pow = math.max(0, math.min(POW_MAX, pow + delta))
+  self.memo = buildMemo(tough, pow)
+  self.setName(buildNameLabel(tough, pow))
+end
+
+local function forSelectedOrSelf(player_color, fn)
+  local selected = Player[player_color].getSelectedObjects()
+  if #selected > 0 then
+    for _, o in ipairs(selected) do fn(o) end
+  else
+    fn(self)
+  end
+end
+
+local function buildMenu()
+  self.clearContextMenu()
+  if TOUGH_MAX > 0 then
+    self.addContextMenuItem("Take Wound", function(player_color)
+      forSelectedOrSelf(player_color, function(o)
+        o.call('adjustWound', { delta = -1 })
+      end)
+    end)
+    self.addContextMenuItem("Heal Wound", function(player_color)
+      forSelectedOrSelf(player_color, function(o)
+        o.call('adjustWound', { delta = 1 })
+      end)
+    end)
+  end
+  if POW_MAX > 0 then
+    self.addContextMenuItem("Use Power", function(player_color)
+      forSelectedOrSelf(player_color, function(o)
+        o.call('adjustPower', { delta = -1 })
+      end)
+    end)
+    self.addContextMenuItem("Restore Power", function(player_color)
+      forSelectedOrSelf(player_color, function(o)
+        o.call('adjustPower', { delta = 1 })
+      end)
+    end)
+  end
+end
+
+function onLoad()
+  local tough, pow = parseMemo(self.memo)
+  self.setName(buildNameLabel(tough, pow))
+  self.setDescription(formatDescription())
+  buildMenu()
+end
+]==]
+
+local function buildPerModelScript(unitKey)
+  local profile = HERO_PROFILES[unitKey]
+  if not profile then return nil end
+  local toughMax = getToughMax(unitKey) or 0
+  local powMax = getPowMax(unitKey)
+
+  local script = PER_MODEL_SCRIPT_TEMPLATE
+  script = script:gsub("@@UNIT_NAME@@", gsubSafe(luaStringEscape(unitKey)))
+  script = script:gsub("@@CLASS@@", gsubSafe(luaStringEscape(profile.class or "")))
+  script = script:gsub("@@LEVEL@@", gsubSafe(luaStringEscape(tostring(profile.level or ""))))
+  script = script:gsub("@@STATS@@", gsubSafe(luaStringEscape(profile.stats)))
+  script = script:gsub("@@SUBSTATS@@", gsubSafe(luaStringEscape(profile.substats or "")))
+  script = script:gsub("@@RULES@@", gsubSafe(luaStringEscape(profile.rules)))
+  script = script:gsub("@@TOUGH_MAX@@", tostring(toughMax))
+  script = script:gsub("@@POW_MAX@@", tostring(powMax))
+  -- DETAILS uses [[ ]] (not "..."), so it only needs gsubSafe, not
+  -- luaStringEscape — quotes and backslashes in pasted text are fine
+  -- as-is inside a long-bracket string.
+  script = script:gsub("@@DETAILS@@", gsubSafe(profile.details or ""))
+  return script
+end
+
+-- ===== Assignment =====
+
+local function assignProfile(obj, unitKey)
+  local script = buildPerModelScript(unitKey)
+  if not script then return end
+  local toughMax = getToughMax(unitKey) or 0
+  local powMax = getPowMax(unitKey)
+  obj.memo = tostring(toughMax) .. "|" .. tostring(powMax)
+  obj.setLuaScript(script)
+  obj.reload()
+end
+
+local function forSelectedOrSelf(player_color, fallbackObj, fn)
+  local selected = Player[player_color].getSelectedObjects()
+  if #selected > 0 then
+    for _, o in ipairs(selected) do fn(o) end
+  else
+    fn(fallbackObj)
+  end
+end
+
+-- ===== Menu wiring (unassigned models only) =====
+-- An object with its own script already installed (getLuaScript() is
+-- non-empty) manages its own menu from here on, so this only ever
+-- touches models that haven't been assigned yet.
+
+local function attachUnassignedMenu(object)
+  if ONLY_FIGURINES and not object.hasTag("Figurine") then return end
+  local existingScript = object.getLuaScript()
+  if existingScript and existingScript ~= "" then return end
+
+  object.clearContextMenu()
+  for unitKey, _ in pairs(HERO_PROFILES) do
+    object.addContextMenuItem(unitKey, function(player_color)
+      forSelectedOrSelf(player_color, object, function(o)
+        assignProfile(o, unitKey)
+      end)
+    end)
+  end
+end
+
+-- Covers models already on the table when the save loads...
+function onLoad()
+  for _, obj in ipairs(getAllObjects()) do
+    attachUnassignedMenu(obj)
+  end
+end
+
+-- ...and models spawned afterward (from a bag, spawnObject, etc.)
+function onObjectSpawn(object)
+  attachUnassignedMenu(object)
+end
+FOOTER_EOF
+
+unit_count="$(grep -c '^  \[' "$OUTPUT_FILE" || true)"
+echo "Wrote ${unit_count} hero profile(s) to ${OUTPUT_FILE}"
