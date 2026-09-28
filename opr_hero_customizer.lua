@@ -296,7 +296,7 @@ local function buildNameLabel()
   return label
 end
 
-local WEAPON_PROFILE_COLOR = "9ca3af" -- grey, for a weapon's (range, attacks, ...)
+local WEAPON_PROFILE_COLOR = "c0c6cf" -- light grey, for a weapon's (range, attacks, ...)
 
 -- Stat tags an ability name can end in, e.g. "Battle Rest (Str)".
 -- Tagged abilities are grouped under their stat in the tooltip.
@@ -326,7 +326,7 @@ local function splitStatTag(name)
 end
 
 -- "Grave-Chillblain Wand (18\", A4)" -> bullet, white name, then the
--- profile smaller and grey. Items without parentheses show as-is.
+-- profile in light grey. Items without parentheses show as-is.
 local function formatEquipItem(item)
   local openIdx = item:find("(", 1, true)
   if not openIdx then return "• " .. item end
@@ -335,7 +335,7 @@ local function formatEquipItem(item)
   if profile:sub(-1) == ")" then profile = profile:sub(1, -2) end
   profile = trim(profile)
   if name == "" then return "• " .. item end
-  return "• " .. name .. "  [sub][" .. WEAPON_PROFILE_COLOR .. "]" .. profile .. "[-][/sub]"
+  return "• " .. name .. "  [" .. WEAPON_PROFILE_COLOR .. "]" .. profile .. "[-]"
 end
 
 -- Tooltip (hover): Str/Dex/Wil (Q/D/Tough are already in the Name
@@ -743,7 +743,7 @@ end
 -- Bump this whenever PER_MODEL_SCRIPT_TEMPLATE changes: heroes carrying
 -- an older version are upgraded automatically (keeping their data)
 -- the next time this Global script loads or they're spawned.
-local SCRIPT_VERSION = 2
+local SCRIPT_VERSION = 3
 
 -- Keys copied from an old hero's saved data into the upgraded script.
 local STATE_KEYS = {
