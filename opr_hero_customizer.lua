@@ -299,7 +299,7 @@ local function buildNameLabel()
   return label
 end
 
-local WEAPON_PROFILE_COLOR = "c0c6cf" -- light grey, for a weapon's (range, attacks, ...)
+local WEAPON_PROFILE_COLOR = "fdba74" -- pale orange, for the weapon stat header and stat lines
 
 -- Stat tags an ability name can end in, e.g. "Battle Rest (Str)".
 -- Tagged abilities are grouped under their stat in the tooltip.
@@ -784,7 +784,7 @@ end
 -- Bump this whenever PER_MODEL_SCRIPT_TEMPLATE changes: heroes carrying
 -- an older version are upgraded automatically (keeping their data)
 -- the next time this Global script loads or they're spawned.
-local SCRIPT_VERSION = 4
+local SCRIPT_VERSION = 5
 
 -- Keys copied from an old hero's saved data into the upgraded script.
 local STATE_KEYS = {
