@@ -47,7 +47,10 @@ per-model template changes.** The template carries a
 replaces any customizer script with a lower version, reading the hero's
 `script_state` and baking it in as the new script's `DEFAULTS` so no
 data is lost. Its tooltip omits Q/D/Tough (already in the Name field),
-groups abilities by a trailing `(Str)`/`(Dex)`/`(Wil)` tag, and leaves
+groups abilities by a trailing `(Str)`/`(Dex)`/`(Wil)` tag, lists each
+weapon as a bulleted name with an indented `RNG / ATK / AP / SPE` line
+beneath it (TTS tooltips can't do real columns — `<pos>`-style tags
+render as literal text, tested in-game), and leaves
 ability descriptions to the "Ability Info..." menu (printed to chat).
 
 ## Commands

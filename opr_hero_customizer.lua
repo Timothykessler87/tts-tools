@@ -328,21 +328,56 @@ local function splitStatTag(name)
   return name, nil
 end
 
--- "Grave-Chillblain Wand (18\", A4)" -> bullet, white name, then the
--- profile in light grey. Items without parentheses show as-is.
+-- Splits a weapon's profile ("12\", A4, AP(2), Puncture") into fixed
+-- columns: range (has a "), attacks (A<n>), AP (AP<n> or AP(<n>), shown
+-- as the bare number), and everything else as special rules. Missing
+-- columns are "-". Simple anchored patterns only (no lazy match — see
+-- MoonSharp note).
+local function splitWeaponProfile(profile)
+  local rng, atk, ap, special = "-", "-", "-", {}
+  for _, token in ipairs(splitTopLevelCommas(profile)) do
+    if token ~= "" then
+      if token:find("\"", 1, true) then
+        rng = token
+      elseif token:match("^A%d+$") then
+        atk = token
+      elseif token:match("^AP%s*%(?%s*%d+%s*%)?$") then
+        ap = token:match("%d+")
+      else
+        table.insert(special, token)
+      end
+    end
+  end
+  local spe = "-"
+  if #special > 0 then spe = table.concat(special, ", ") end
+  return rng, atk, ap, spe
+end
+
+-- The tooltip font is proportional and TTS BBCode has no tables, tabs
+-- or position tags (tested), so real columns aren't possible. Instead
+-- each weapon is two lines: bulleted name, then its stats indented in
+-- a fixed RNG / ATK / AP / SPE order under a matching header line.
+local WEAPON_HEADER = "RNG / ATK / AP / SPE"
+local WEAPON_STATS_INDENT = "    "
+
+-- Returns the tooltip lines for one equipment item. Items without a
+-- (profile) are just the bulleted name.
 local function formatEquipItem(item)
   local openIdx = item:find("(", 1, true)
-  if not openIdx then return "• " .. item end
-  local name = trim(item:sub(1, openIdx - 1))
+  local name = openIdx and trim(item:sub(1, openIdx - 1)) or ""
+  if not openIdx or name == "" then return { "• " .. item } end
   local profile = item:sub(openIdx + 1)
   if profile:sub(-1) == ")" then profile = profile:sub(1, -2) end
-  profile = trim(profile)
-  if name == "" then return "• " .. item end
-  return "• " .. name .. "  [" .. WEAPON_PROFILE_COLOR .. "]" .. profile .. "[-]"
+  local rng, atk, ap, spe = splitWeaponProfile(trim(profile))
+  return {
+    "• " .. name,
+    WEAPON_STATS_INDENT .. "[" .. WEAPON_PROFILE_COLOR .. "]" ..
+      rng .. " / " .. atk .. " / " .. ap .. " / " .. spe .. "[-]",
+  }
 end
 
 -- Tooltip (hover): Str/Dex/Wil (Q/D/Tough are already in the Name
--- field), abilities grouped by stat tag, then equipment. Ability
+-- field), abilities grouped by stat tag, then weapons. Ability
 -- descriptions are NOT shown here — they're in the "Ability Info..."
 -- menu, to keep the tooltip short.
 local function formatDescription()
@@ -374,8 +409,11 @@ local function formatDescription()
   local equip = trim(state.equipment)
   if equip ~= "" then
     table.insert(lines, "")
+    table.insert(lines, "[" .. WEAPON_PROFILE_COLOR .. "]" .. WEAPON_HEADER .. "[-]")
     for _, item in ipairs(splitTopLevelCommas(equip)) do
-      if item ~= "" then table.insert(lines, formatEquipItem(item)) end
+      if item ~= "" then
+        for _, line in ipairs(formatEquipItem(item)) do table.insert(lines, line) end
+      end
     end
   end
   return table.concat(lines, "\n")
@@ -746,7 +784,7 @@ end
 -- Bump this whenever PER_MODEL_SCRIPT_TEMPLATE changes: heroes carrying
 -- an older version are upgraded automatically (keeping their data)
 -- the next time this Global script loads or they're spawned.
-local SCRIPT_VERSION = 3
+local SCRIPT_VERSION = 4
 
 -- Keys copied from an old hero's saved data into the upgraded script.
 local STATE_KEYS = {
