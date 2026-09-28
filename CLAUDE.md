@@ -23,12 +23,35 @@ the `.sh` parsers.
 | `opr_army_list_to_lua/opr_list_to_lua.sh` | Generates the squad Global script from an Army Forge text-export file |
 | `opr_hero_assigner.lua` | Hero Global script — paste directly into TTS, hand-edit `HERO_PROFILES` |
 | `opr_hero_list_to_lua.sh` | Generates the hero Global script from a hero-list text file |
+| `opr_hero_customizer.lua` | Hero Global script with **no generator**: assigns a generic "HERO NAME" template that is edited in-game via the model's "Edit Hero..." menu |
 
 **The two `.sh` generators and their paired `.lua` files are kept in sync by
 hand.** They must produce output identical in structure/behavior to the
 standalone `.lua` file. A change to one (e.g. a new BBCode field, a new
 per-model right-click action) needs the matching edit made in the other three
 files.
+
+`opr_hero_customizer.lua` is standalone (no `.sh` pair). Its per-model
+script keeps all hero data in the object's saved state (`onSave` /
+`onLoad(saved_data)` as JSON) rather than baked-in literals, and edits
+go through TTS's `Player.showInputDialog` / `showMemoDialog` /
+`showOptionsDialog`. The only thing injected at assignment is
+`HERO_DEFAULTS`, serialized into the template's `@@DEFAULTS@@`. It
+shares the display code, colors, `adjustWound`/`adjustPower` names and
+range measuring with `opr_hero_assigner.lua`'s per-model script, so
+changes there may need mirroring here by hand.
+
+**Bump `SCRIPT_VERSION` in `opr_hero_customizer.lua` whenever its
+per-model template changes.** The template carries a
+`-- opr_hero_customizer script version: N` line; on load/spawn, Global
+replaces any customizer script with a lower version, reading the hero's
+`script_state` and baking it in as the new script's `DEFAULTS` so no
+data is lost. Its tooltip omits Q/D/Tough (already in the Name field),
+groups abilities by a trailing `(Str)`/`(Dex)`/`(Wil)` tag, lists each
+weapon as a bulleted name with an indented `RNG / ATK / AP / SPE` line
+beneath it (TTS tooltips can't do real columns — `<pos>`-style tags
+render as literal text, tested in-game), and leaves
+ability descriptions to the "Ability Info..." menu (printed to chat).
 
 ## Commands
 
@@ -122,6 +145,18 @@ text so it doesn't need quote-escaping.
 The generators can't capture `class`/`level` from the text-list format (no
 slot for it) — they emit empty placeholders that need filling in by hand.
 Equipment must be exactly one line in the source text.
+
+## Gotcha: confirm which Global script is actually running
+
+The TTS script editor can show newly pasted text while an older Global
+script is still what's running (seen once with the hero customizer:
+newly assigned models kept getting the previous per-model script; cause
+not pinned down — a stale copy source is the leading suspect, and a
+loaded save was NOT required for it to work later). The "Error no save
+found" message after Save & Play is normal and harmless.
+`opr_hero_customizer.lua` prints "Hero Customizer Global loaded
+(script vN)" on load, and each per-model upgrade to chat, so what's
+running is visible.
 
 ## Critical gotcha: MoonSharp pattern limits
 
