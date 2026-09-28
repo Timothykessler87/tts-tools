@@ -31,16 +31,14 @@
 --     data) when this Global script loads or when they're spawned.
 --
 -- Install:
---   1. Make sure you're playing from a LOADED SAVE (Games -> Save &
---      Load: save the table, then load that save).
---   2. Modding -> Scripting -> Global, select all and delete whatever
---      is there, paste this in, then Save & Play.
---   3. Chat should show "Hero Customizer Global loaded (script vN)".
---   If TTS instead says "Error no save found. You must load a save
---   first.", the new script did NOT take effect — the editor shows
---   the new text but TTS keeps running the previous Global script (and
---   newly assigned models get the previous version). Do step 1, then
---   Save & Play again.
+--   Modding -> Scripting -> Global, select all and delete whatever is
+--   there, paste this in, then Save & Play. Chat should then show
+--   "Hero Customizer Global loaded (script vN)" with the version you
+--   pasted. If it doesn't, TTS is still running the previous Global
+--   script (newly assigned models get the old per-model script and
+--   upgrades don't happen): make sure you copied the latest file
+--   (refresh the page you copy from) and Save & Play again. The
+--   "Error no save found" message on its own is harmless.
 --
 -- Defaults:
 --   HERO_DEFAULTS below is what a freshly assigned model starts with.
