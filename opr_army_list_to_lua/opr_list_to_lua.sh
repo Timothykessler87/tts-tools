@@ -346,14 +346,6 @@ end
 -- minis use a different scale, adjust this to calibrate.
 local INCHES_PER_UNIT = 1
 
--- Plain gsub, not a lazy-match pattern, so it's safe under MoonSharp's
--- pattern-complexity limit (see project notes).
-local function trim(s)
-  s = s:gsub("^%s+", "")
-  s = s:gsub("%s+$", "")
-  return s
-end
-
 -- Estimates a round base's radius (in inches) from its axis-aligned
 -- bounding box: for a circular base the box is a square of side
 -- 2*radius in the x/z plane, so this holds up under rotation.
