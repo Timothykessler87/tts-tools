@@ -143,6 +143,16 @@ The generators can't capture `class`/`level` from the text-list format (no
 slot for it) — they emit empty placeholders that need filling in by hand.
 Equipment must be exactly one line in the source text.
 
+## Gotcha: Save & Play needs a loaded save
+
+If TTS says "Error no save found. You must load a save first." after
+Save & Play, the pasted Global script is **not** applied: the editor
+shows the new text, but the previous Global keeps running (so newly
+assigned models get the old per-model script and version upgrades
+don't happen). Save the table, load that save, then Save & Play.
+`opr_hero_customizer.lua` prints "Hero Customizer Global loaded
+(script vN)" on load to make this visible.
+
 ## Critical gotcha: MoonSharp pattern limits
 
 TTS's Lua engine is **MoonSharp, not standard Lua**, with a much stricter
