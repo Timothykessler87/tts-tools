@@ -806,15 +806,20 @@ end
 -- data is read from its saved state and baked in as the new script's
 -- starting values, so it survives even if TTS drops the saved state
 -- across the reload.
-local function upgradeHero(obj)
+local function upgradeHero(obj, fromVersion)
   local data = nil
   local okState, saved = pcall(function() return obj.script_state end)
   if okState and type(saved) == "string" and saved ~= "" then
     local okDecode, decoded = pcall(JSON.decode, saved)
     if okDecode and type(decoded) == "table" then data = decoded end
   end
+  local heroName = (data and type(data.name) == "string") and data.name or "a hero"
   obj.setLuaScript(buildPerModelScript(data))
   obj.reload()
+  -- "(data carried by TTS)" = saved state wasn't readable up front, so
+  -- the hero's data relies on TTS keeping it across the reload.
+  print("Hero Customizer: updated " .. heroName .. " from script v" .. fromVersion ..
+    " to v" .. SCRIPT_VERSION .. (data and "." or " (data carried by TTS)."))
 end
 
 local function forSelectedOrSelf(player_color, fallbackObj, fn)
@@ -836,7 +841,12 @@ local function handleObject(object)
   local existingScript = object.getLuaScript()
   if existingScript and existingScript ~= "" then
     local version = getCustomizerVersion(existingScript)
-    if version and version < SCRIPT_VERSION then upgradeHero(object) end
+    if version and version < SCRIPT_VERSION then
+      local ok, err = pcall(upgradeHero, object, version)
+      if not ok then
+        print("Hero Customizer: update from script v" .. version .. " failed: " .. tostring(err))
+      end
+    end
     return
   end
 
@@ -851,11 +861,16 @@ local function handleObject(object)
   end)
 end
 
--- Covers models already on the table when the save loads...
+-- Covers models already on the table when the save loads. Delayed
+-- slightly so it runs after TTS has finished loading every object
+-- (and applying any per-object scripts from the scripting editor),
+-- rather than racing it.
 function onLoad()
-  for _, obj in ipairs(getAllObjects()) do
-    handleObject(obj)
-  end
+  Wait.time(function()
+    for _, obj in ipairs(getAllObjects()) do
+      handleObject(obj)
+    end
+  end, 0.5)
 end
 
 -- ...and models spawned afterward (from a bag, spawnObject, etc.)
