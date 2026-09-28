@@ -26,7 +26,11 @@
 --     and saved-object loads.
 --
 -- Install:
---   Modding -> Scripting -> Global, paste this in, then Save & Play.
+--   Modding -> Scripting -> Global, select all and delete whatever is
+--   there, paste this in, then Save & Play. If TTS says "Error no save
+--   found. You must load a save first.", the script did NOT run:
+--   create a save via Games -> Save & Load -> Create (or load an
+--   existing one) first, then paste and Save & Play again.
 --
 -- Defaults:
 --   HERO_DEFAULTS below is what a freshly assigned model starts with.
