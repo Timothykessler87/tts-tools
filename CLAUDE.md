@@ -23,12 +23,23 @@ the `.sh` parsers.
 | `opr_army_list_to_lua/opr_list_to_lua.sh` | Generates the squad Global script from an Army Forge text-export file |
 | `opr_hero_assigner.lua` | Hero Global script — paste directly into TTS, hand-edit `HERO_PROFILES` |
 | `opr_hero_list_to_lua.sh` | Generates the hero Global script from a hero-list text file |
+| `opr_hero_customizer.lua` | Hero Global script with **no generator**: assigns a generic "HERO NAME" template that is edited in-game via the model's "Edit Hero..." menu |
 
 **The two `.sh` generators and their paired `.lua` files are kept in sync by
 hand.** They must produce output identical in structure/behavior to the
 standalone `.lua` file. A change to one (e.g. a new BBCode field, a new
 per-model right-click action) needs the matching edit made in the other three
 files.
+
+`opr_hero_customizer.lua` is standalone (no `.sh` pair). Its per-model
+script keeps all hero data in the object's saved state (`onSave` /
+`onLoad(saved_data)` as JSON) rather than baked-in literals, and edits
+go through TTS's `Player.showInputDialog` / `showMemoDialog` /
+`showOptionsDialog`. The only thing injected at assignment is
+`HERO_DEFAULTS`, serialized into the template's `@@DEFAULTS@@`. It
+shares the display code, colors, `adjustWound`/`adjustPower` names and
+range measuring with `opr_hero_assigner.lua`'s per-model script, so
+changes there may need mirroring here by hand.
 
 ## Commands
 
