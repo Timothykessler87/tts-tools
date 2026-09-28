@@ -51,16 +51,20 @@ changes, and should be treated as needing matching edits.
    mechanism for invoking a named global function on another object's script.
 5. **"Measure Range"** (every assigned model, squad and hero alike): select
    one or more target models, then right-click the measuring model and
-   choose it. It computes the horizontal (x/z) distance from that model to
-   each selected target, assuming **1 TTS world unit = 1 inch** (retune
-   `INCHES_PER_UNIT` in the per-model template if your table's scale
-   differs), then checks that distance against the range of each of the
-   model's own ranged weapons (parsed straight out of its `Equipment:` list
-   — a weapon entry needs a `24"`-style quoted range to be checked; entries
-   with no quoted range, e.g. `CCW (A2)`, are reported as melee and not
-   range-checked, since OPR resolves those in base contact). Results are
-   printed to the acting player via `broadcastToColor`, one line per target
-   plus one line per weapon.
+   choose it. It computes the horizontal (x/z) **base-edge to base-edge**
+   distance from that model to each selected target — not center to
+   center, since that's how OPR measures range — by taking each object's
+   `getBounds().size` as an estimate of its (round) base diameter and
+   subtracting both models' radii from the raw center-to-center distance.
+   Distance assumes **1 TTS world unit = 1 inch** (retune `INCHES_PER_UNIT`
+   in the per-model template if your table's scale differs), then checks
+   that distance against the range of each of the model's own ranged
+   weapons (parsed straight out of its `Equipment:` list — a weapon entry
+   needs a `24"`-style quoted range to be checked; entries with no quoted
+   range, e.g. `CCW (A2)`, are reported as melee and not range-checked,
+   since OPR resolves those in base contact). Results are printed to the
+   acting player via `broadcastToColor`, one line per target plus one line
+   per weapon.
 
 ## Display design
 

@@ -346,10 +346,32 @@ end
 -- minis use a different scale, adjust this to calibrate.
 local INCHES_PER_UNIT = 1
 
+-- Plain gsub, not a lazy-match pattern, so it's safe under MoonSharp's
+-- pattern-complexity limit (see project notes).
+local function trim(s)
+  s = s:gsub("^%s+", "")
+  s = s:gsub("%s+$", "")
+  return s
+end
+
+-- Estimates a round base's radius (in inches) from its axis-aligned
+-- bounding box: for a circular base the box is a square of side
+-- 2*radius in the x/z plane, so this holds up under rotation.
+local function getBaseRadiusInches(obj)
+  local bounds = obj.getBounds()
+  if not bounds or not bounds.size then return 0 end
+  return ((bounds.size.x + bounds.size.z) / 4) * INCHES_PER_UNIT
+end
+
+-- Base-edge to base-edge distance, not center to center: OPR measures
+-- range from the edge of the model's base, so this subtracts both
+-- models' estimated base radii from the raw center-to-center distance.
 local function getDistanceInches(a, b)
   local pa, pb = a.getPosition(), b.getPosition()
   local dx, dz = pa.x - pb.x, pa.z - pb.z
-  return math.sqrt(dx * dx + dz * dz) * INCHES_PER_UNIT
+  local centerDist = math.sqrt(dx * dx + dz * dz) * INCHES_PER_UNIT
+  local edgeDist = centerDist - getBaseRadiusInches(a) - getBaseRadiusInches(b)
+  return math.max(0, edgeDist)
 end
 
 -- Parses this model's equipment (e.g. `Rifle (24", A3)`, `CCW (A2)`)
