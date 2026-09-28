@@ -175,7 +175,10 @@ cat > "$OUTPUT_FILE" << HEADER_EOF
 -- Note on models assigned under an earlier version of this script:
 --   Those models never got their own script, so they'll show up as
 --   "unassigned" here again — just right-click and pick their unit
---   once more to bring them onto this version.
+--   once more to bring them onto this version. Models that already
+--   have an older per-model script baked in (including the version
+--   that threw "pattern too complex") also need re-assigning — clear
+--   their script first, or spawn fresh copies.
 --
 -- Regenerate:
 --   Re-run opr_list_to_lua.sh whenever your list changes, rather
@@ -231,6 +234,17 @@ local RULES = "@@RULES@@"
 local TOUGH_MAX = @@TOUGH_MAX@@
 
 -- ===== Text helpers =====
+-- NOTE: TTS runs Lua on MoonSharp, which throws "pattern too complex"
+-- on lazy-match patterns like "^(.-)literal(.+)$" over longer strings
+-- (standard Lua doesn't). Everything below uses plain find()/sub() and
+-- simple non-lazy patterns instead.
+
+-- Trims leading/trailing whitespace without a lazy-match pattern.
+local function trim(s)
+  s = s:gsub("^%s+", "")
+  s = s:gsub("%s+$", "")
+  return s
+end
 
 -- Splits a comma-separated string on TOP-LEVEL commas only, so a
 -- weapon like "Energy Sword (A6, AP(1), Rending)" stays one item
@@ -250,20 +264,24 @@ local function splitTopLevelCommas(s)
   end
   table.insert(items, s:sub(start))
   for i, item in ipairs(items) do
-    items[i] = item:match("^%s*(.-)%s*$")
+    items[i] = trim(item)
   end
   return items
 end
 
 -- Pulls the equipment list out of RULES (if present) as a table of
 -- individual items, separate from the ability/special-rule text.
+-- Uses a plain-text find() rather than a lazy-match pattern.
 local function splitAbilitiesAndEquipment()
-  local abilities, equipStr = RULES:match("^(.-)%s*Equipment:%s*(.+)$")
-  if not equipStr then
-    return RULES, nil
+  local idx = RULES:find("Equipment:", 1, true)
+  if not idx then
+    return trim(RULES), nil
   end
+  local abilities = RULES:sub(1, idx - 1)
+  local equipStr = RULES:sub(idx + #"Equipment:")
   abilities = abilities:gsub("%.%s*$", "")
-  abilities = abilities:match("^%s*(.-)%s*$")
+  abilities = trim(abilities)
+  equipStr = trim(equipStr)
   return abilities, splitTopLevelCommas(equipStr)
 end
 
@@ -279,7 +297,10 @@ local RULES_COLOR = "3498db" -- blue
 -- "Tough: current / max" line (only if this unit has Tough) — all
 -- visible without hovering.
 local function buildNameLabel(tough)
-  local q, d = STATS:match("Quality (%d+)%+.-Defense (%d+)%+")
+  -- Two separate simple matches instead of one lazy pattern spanning
+  -- both values.
+  local q = STATS:match("Quality (%d+)%+")
+  local d = STATS:match("Defense (%d+)%+")
   local label = "[b]" .. UNIT_NAME .. "[/b]"
   if q and d then
     label = label ..
