@@ -41,6 +41,15 @@ shares the display code, colors, `adjustWound`/`adjustPower` names and
 range measuring with `opr_hero_assigner.lua`'s per-model script, so
 changes there may need mirroring here by hand.
 
+**Bump `SCRIPT_VERSION` in `opr_hero_customizer.lua` whenever its
+per-model template changes.** The template carries a
+`-- opr_hero_customizer script version: N` line; on load/spawn, Global
+replaces any customizer script with a lower version, reading the hero's
+`script_state` and baking it in as the new script's `DEFAULTS` so no
+data is lost. Its tooltip omits Q/D/Tough (already in the Name field),
+groups abilities by a trailing `(Str)`/`(Dex)`/`(Wil)` tag, and leaves
+ability descriptions to the "Ability Info..." menu (printed to chat).
+
 ## Commands
 
 Generate a squad Global script from an Army Forge text export:
