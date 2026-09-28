@@ -866,6 +866,9 @@ end
 -- (and applying any per-object scripts from the scripting editor),
 -- rather than racing it.
 function onLoad()
+  -- Confirms in chat which version is actually running (the editor
+  -- can show newer text than TTS is running if Save & Play failed).
+  print("Hero Customizer Global loaded (script v" .. SCRIPT_VERSION .. ").")
   Wait.time(function()
     for _, obj in ipairs(getAllObjects()) do
       handleObject(obj)
